@@ -2,7 +2,7 @@ local Http = game:GetService("HttpService")
 local LocalPlayer = game:GetService("Players").LocalPlayer
 local Api = "https://games.roblox.com/v1/games/"
 local _place = game.PlaceId
-local _servers = Api.._place.."/servers/Public?sortOrder=Asc&limit=1"
+local _servers = Api.._place.."/servers/Public?sortOrder=Asc&limit=100"
 function ListServers(cursor)
     local Raw = game:HttpGet(_servers.. ((cursor and "&cursor="..cursor) or ""))
     return Http:JSONDecode(Raw)
@@ -21,7 +21,7 @@ local MainScript = [[
 ]]
 
 repeat task.wait()
-    LocalPlayer.Character.Humanoid:MoveTo(LocalPlayer.Character:GetPivot().Position + Vector3.new(1, 0, 0))
+    LocalPlayer.Character.Humanoid:MoveTo(LocalPlayer.Character:GetPivot().Position + Vector3.new(1))
 until not LocalPlayer.Character:FindFirstChild("ForceField")
 
 for i, v in pairs(workspace.Game.Entities.ItemPickup:GetChildren()) do
