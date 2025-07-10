@@ -17,7 +17,7 @@ local Server, Next; repeat
     Next = Servers.nextPageCursor
 until Server
 local MainScript = [[
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/bailib/Roblox/refs/heads/main/Game/MoneyPrinter.luau"))()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/xiaoling-create/Roblox/refs/heads/main/%E5%8D%B0%E9%92%9E%E6%9C%BA%E6%BA%90%E7%A0%81.txt"))()
 ]]
 
 repeat task.wait()
