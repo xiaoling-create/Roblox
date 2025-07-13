@@ -1,4 +1,4 @@
-local ui = loadstring(game:HttpGet("https://raw.githubusercontent.com/xiaoling-create/UI/refs/heads/main/%E9%9B%B6%E8%84%9A%E6%9C%ACUi.txt"))()        
+local ui = loadstring(game:HttpGet("https://raw.githubusercontent.com/renlua/Script-Tutorial/refs/heads/main/WareUI.lua"))()        
 local win = ui:new("0脚本")
 
 local ww1 = win:Tab("信息",'126183273159066')
