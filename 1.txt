@@ -1,37 +1,7 @@
-local Main = {
-    tpwalkslow = 0,
-    tpwalkmobile = 0,
-    tpwalkquick = 0,
-    tpwalkslowenable = false,
-    tpwalkmobileenable = false,
-    tpwalkquickenable = false,
-    spinspeed = 0,
-    HitboxStatue = false,
-    HitboxSize = 0,
-    HitboxTransparency = 1,
-    HitboxBrickColor = "Really red"
-}
-
 local ui = loadstring(game:HttpGet("https://raw.githubusercontent.com/xiaoling-create/UI/refs/heads/main/%E9%9B%B6%E8%84%9A%E6%9C%ACUi.txt"))()        
 local win = ui:new("0脚本")
 
 local ww1 = win:Tab("信息",'126183273159066')
-local about = ww1:section("信息",true)
-
-about:Label("账号年龄:"..game.Players.LocalPlayer.AccountAge.."天")
-
-about:Label("服务器id:"..game.GameId)
-
-about:Label("用户id:"..game.Players.LocalPlayer.UserId)
-
-about:Label("客户端id:"..game:GetService("RbxAnalyticsService"):GetClientId())
-
-about:Label("注入器:"..identifyexecutor())
-
-about:Label("用户名:"..game.Players.LocalPlayer.Character.Name)
-
-about:Label("服务器名称:"..game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name)
-
 local about = ww1:section("作者",true)
 
 about:Label("作者小零")
