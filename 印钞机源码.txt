@@ -21,7 +21,8 @@ local MainScript = [[
 ]]
 
 repeat task.wait()
-    LocalPlayer.Character.Humanoid:MoveTo(LocalPlayer.Character:GetPivot().Position + Vector3.new(1, 0, 0))
+    game : GetService (" VirtuallnputManager "): SendKeyEvent ( true ," W ", false , game ) wait (0.01).
+ game : Get Service (" VirtualInputManager "): SendKeyEvent ( false ," W ", false , game ) wait (0.01)
 until not LocalPlayer.Character:FindFirstChild("ForceField")
 
 for i, v in pairs(workspace.Game.Entities.ItemPickup:GetChildren()) do
