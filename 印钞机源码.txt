@@ -1,39 +1,114 @@
 local Http = game:GetService("HttpService")
-local LocalPlayer = game:GetService("Players").LocalPlayer
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+-- 移除UserInputService依赖，改用角色移动模拟（避免权限问题）
+local function simulateMovement()
+    local character = LocalPlayer.Character
+    if not character then return end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        -- 通过Humanoid直接设置移动方向，替代按键事件
+        humanoid:Move(Vector3.new(0, 0, 1), true) -- 向前移动
+        task.wait(0.01)
+        humanoid:Move(Vector3.new(0, 0, 0), false) -- 停止移动
+    end
+end
+
 local Api = "https://games.roblox.com/v1/games/"
 local _place = game.PlaceId
-local _servers = Api.._place.."/servers/Public?sortOrder=Asc&limit=100"
+local _servers = Api .. _place .. "/servers/Public?sortOrder=Asc&limit=100"
+
 function ListServers(cursor)
-    local Raw = game:HttpGet(_servers.. ((cursor and "&cursor="..cursor) or ""))
-    return Http:JSONDecode(Raw)
+    local url = _servers .. (cursor and "&cursor=" .. cursor or "")
+    local success, raw = pcall(function()
+        return game:HttpGet(url)
+    end)
+    if not success then
+        warn("获取服务器列表失败: " .. raw)
+        return nil
+    end
+    return Http:JSONDecode(raw)
 end
-local Server, Next; repeat
+
+local Server, Next
+repeat
     local Servers = ListServers(Next)
+    if not Servers then break end
     local numServers = #Servers.data
     if numServers > 0 then
         local randomIndex = math.random(1, numServers)
-        Server = Servers.data[randomIndex] 
+        Server = Servers.data[randomIndex]
     end
     Next = Servers.nextPageCursor
-until Server
+until Server or not Next
+
 local MainScript = [[
     loadstring(game:HttpGet("https://raw.githubusercontent.com/xiaoling-create/Roblox/refs/heads/main/%E5%8D%B0%E9%92%9E%E6%9C%BA%E6%BA%90%E7%A0%81.txt"))()
 ]]
 
-repeat task.wait()
-    game : GetService (" VirtuallnputManager "): SendKeyEvent ( true ," W ", false , game ) wait (0.01).
- game : Get Service (" VirtualInputManager "): SendKeyEvent ( false ," W ", false , game ) wait (0.01)
-until not LocalPlayer.Character:FindFirstChild("ForceField")
+-- 等待力场消失（使用角色移动模拟替代按键事件）
+repeat
+    task.wait()
+    simulateMovement() -- 改用Humanoid移动，避免UserInputService问题
+    task.wait(0.01)
+until not (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("ForceField"))
 
-for i, v in pairs(workspace.Game.Entities.ItemPickup:GetChildren()) do
-    Prompt = v.PrimaryPart:FindFirstChildOfClass("ProximityPrompt")
-    if Prompt.ObjectText == "Money Printer" then
-        LocalPlayer.Character.HumanoidRootPart.CFrame = v.PrimaryPart.CFrame
-        wait()
-        fireproximityprompt(Prompt)
-    else
-        queue_on_teleport(MainScript)
-        wait()
-        game:GetService("TeleportService"):TeleportToPlaceInstance(_place,Server.id,LocalPlayer)
+-- 安全移动角色函数
+local function safeTeleport(targetCFrame, character)
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not rootPart or not humanoid then return false end
+
+    local originalCanCollide = rootPart.CanCollide
+    rootPart.CanCollide = false
+
+    local startCFrame = rootPart.CFrame
+    local steps = 10
+    for i = 1, steps do
+        local t = i / steps
+        rootPart.CFrame = startCFrame:Lerp(targetCFrame, t)
+        RunService.Heartbeat:Wait()
     end
+
+    rootPart.CanCollide = originalCanCollide
+    return true
+end
+
+-- 查找并交互目标物品
+local foundPrinter = false
+if workspace:FindFirstChild("Game") and workspace.Game:FindFirstChild("Entities") and workspace.Game.Entities:FindFirstChild("ItemPickup") then
+    for _, v in ipairs(workspace.Game.Entities.ItemPickup:GetChildren()) do
+        local primaryPart = v.PrimaryPart
+        if primaryPart then
+            local prompt = primaryPart:FindFirstChildOfClass("ProximityPrompt")
+            if prompt and prompt.ObjectText == "Money Printer" then
+                if LocalPlayer.Character then
+                    local targetCFrame = primaryPart.CFrame * CFrame.new(0, 5, 3)
+                    local success = safeTeleport(targetCFrame, LocalPlayer.Character)
+                    if success then
+                        task.wait(0.5)
+                        local interactSuccess = pcall(function()
+                            fireproximityprompt(prompt, 1)
+                        end)
+                        if interactSuccess then
+                            foundPrinter = true
+                            break
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- 未找到则传送
+if not foundPrinter and Server then
+    queue_on_teleport(MainScript)
+    task.wait(1)
+    TeleportService:TeleportToPlaceInstance(_place, Server.id, LocalPlayer)
+elseif not Server then
+    warn("未找到可用服务器")
 end
