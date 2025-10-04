@@ -30,6 +30,9 @@ local itemFilters = {
 local SPECIAL_ITEM_TIMEOUT = 5
 local NORMAL_ITEM_TIMEOUT = 180
 
+-- 提前声明换服函数（解决作用域问题）
+local performServerHop
+
 -- 创建UI
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "ItemCollectorUI"
@@ -37,10 +40,10 @@ ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.IgnoreGuiInset = true
 
--- 按钮容器（移至右侧）
+-- 按钮容器（右侧）
 local ButtonContainer = Instance.new("Frame")
-ButtonContainer.Size = UDim2.new(0, 200, 0, 110)  -- 增加高度容纳新按钮
-ButtonContainer.Position = UDim2.new(0.98, -200, 0.5, -55)  -- 右侧定位
+ButtonContainer.Size = UDim2.new(0, 200, 0, 110)
+ButtonContainer.Position = UDim2.new(0.98, -200, 0.5, -55)
 ButtonContainer.BackgroundTransparency = 0.8
 ButtonContainer.BackgroundColor3 = Color3.new(0, 0, 0)
 ButtonContainer.BorderSizePixel = 2
@@ -83,8 +86,8 @@ BlueCardButton.Parent = ButtonContainer
 -- 立即换服按钮
 local HopServerButton = Instance.new("TextButton")
 HopServerButton.Size = UDim2.new(1, -10, 0, 25)
-HopServerButton.Position = UDim2.new(0, 5, 0, 85)  -- 新增按钮位置
-HopServerButton.BackgroundColor3 = Color3.new(0, 1, 0)  -- 绿色标识
+HopServerButton.Position = UDim2.new(0, 5, 0, 85)
+HopServerButton.BackgroundColor3 = Color3.new(0, 1, 0)
 HopServerButton.TextColor3 = Color3.new(1, 1, 1)
 HopServerButton.Font = Enum.Font.Gotham
 HopServerButton.TextSize = 14
@@ -104,15 +107,18 @@ BlueCardButton.MouseButton1Click:Connect(function()
     BlueCardButton.BackgroundTransparency = itemFilters["Police Armory Keycard"] and 0.5 or 0
 end)
 
--- 立即换服按钮事件
+-- 立即换服按钮事件（修复：使用提前声明的函数）
 HopServerButton.MouseButton1Click:Connect(function()
     HopServerButton.Text = "换服中..."
     HopServerButton.BackgroundColor3 = Color3.new(0.8, 0.8, 0.8)
     HopServerButton.Active = false  -- 防止重复点击
     
-    -- 立即执行换服
-    local success = performServerHop()
-    if not success then
+    -- 立即执行换服（使用pcall捕获错误）
+    local success, result = pcall(function()
+        return performServerHop()
+    end)
+    if not success or not result then
+        warn("换服失败: " .. (result or "未知错误"))
         -- 换服失败时恢复按钮状态
         task.wait(2)
         HopServerButton.Text = "立即换服"
@@ -268,13 +274,29 @@ local function collectItem(item, character)
     end
 end
 
--- 执行换服操作（独立函数，供按钮调用）
-local function performServerHop()
-    local targetServer = getRandomServer()
+-- 定义换服函数（在按钮事件之后，解决114行报错）
+function performServerHop()
+    -- 尝试获取可用服务器（增加错误捕获）
+    local targetServer
+    local success, err = pcall(function()
+        targetServer = getRandomServer()
+    end)
+    if not success then
+        warn("获取服务器失败: " .. err)
+        return false
+    end
+    
     if targetServer then
-        queue_on_teleport(MainScript)
-        task.wait(1)
-        TeleportService:TeleportToPlaceInstance(_place, targetServer.id, LocalPlayer)
+        -- 尝试传送（增加错误捕获）
+        local teleportSuccess, teleportErr = pcall(function()
+            queue_on_teleport(MainScript)
+            task.wait(1)
+            TeleportService:TeleportToPlaceInstance(_place, targetServer.id, LocalPlayer)
+        end)
+        if not teleportSuccess then
+            warn("传送失败: " .. teleportErr)
+            return false
+        end
         return true
     else
         warn("未找到可用服务器")
@@ -341,7 +363,7 @@ local function main()
         -- 检查是否包含特殊物品
         local hasSpecialFailed = false
         for _, item in ipairs(failedItems) do
-            if item.isSpecial and not itemFilters[item.type] then  -- 只考虑未被过滤的特殊物品
+            if item.isSpecial and not itemFilters[item.type] then
                 hasSpecialFailed = true
                 break
             end
