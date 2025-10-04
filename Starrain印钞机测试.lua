@@ -14,8 +14,8 @@ local TARGET_ITEMS = {
     "Easter Basket", "Military Armory Keycard", "Treasure Map", "Police Armory Keycard", "Holy Grail"
 }
 
--- 特殊物品配置
-local SPECIAL_ITEMS = {
+-- 特殊物品配置（全局共享）
+_G.SPECIAL_ITEMS = {
     ["Military Armory Keycard"] = {name = "红卡", color = Color3.new(1, 0, 0)},
     ["Police Armory Keycard"] = {name = "蓝卡", color = Color3.new(0, 0, 1)}
 }
@@ -30,14 +30,20 @@ local itemFilters = {
 local SPECIAL_ITEM_TIMEOUT = 5
 local NORMAL_ITEM_TIMEOUT = 180
 
--- 创建UI（放大版本）
+-- 清除旧UI防止冲突
+local oldGui = LocalPlayer:FindFirstChild("PlayerGui"):FindFirstChild("ItemCollectorUI")
+if oldGui then
+    oldGui:Destroy()
+end
+
+-- 创建UI（修复交互问题）
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "ItemCollectorUI"
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.IgnoreGuiInset = true
 
--- 按钮容器（放大并移至右侧）
+-- 按钮容器（确保可交互）
 local ButtonContainer = Instance.new("Frame")
 ButtonContainer.Size = UDim2.new(0, 280, 0, 160)
 ButtonContainer.Position = UDim2.new(0.95, -280, 0.5, -80)
@@ -46,9 +52,11 @@ ButtonContainer.BackgroundColor3 = Color3.new(0, 0, 0)
 ButtonContainer.BorderSizePixel = 3
 ButtonContainer.BorderColor3 = Color3.new(0.7, 0.7, 0.7)
 ButtonContainer.ClipsDescendants = true
+ButtonContainer.Active = true  -- 允许交互
+ButtonContainer.Selectable = true
 ButtonContainer.Parent = ScreenGui
 
--- 标题（放大文字）
+-- 标题
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, 0, 0, 30)
 TitleLabel.BackgroundTransparency = 1
@@ -58,29 +66,35 @@ TitleLabel.Font = Enum.Font.GothamBold
 TitleLabel.TextSize = 18
 TitleLabel.Parent = ButtonContainer
 
--- 红卡按钮（放大）
+-- 红卡按钮（修复交互）
 local RedCardButton = Instance.new("TextButton")
 RedCardButton.Size = UDim2.new(1, -20, 0, 35)
 RedCardButton.Position = UDim2.new(0, 10, 0, 35)
-RedCardButton.BackgroundColor3 = SPECIAL_ITEMS["Military Armory Keycard"].color
+RedCardButton.BackgroundColor3 = _G.SPECIAL_ITEMS["Military Armory Keycard"].color
 RedCardButton.TextColor3 = Color3.new(1, 1, 1)
 RedCardButton.Font = Enum.Font.Gotham
 RedCardButton.TextSize = 16
-RedCardButton.Text = "移出 " .. SPECIAL_ITEMS["Military Armory Keycard"].name
+RedCardButton.Text = "移出 " .. _G.SPECIAL_ITEMS["Military Armory Keycard"].name
+RedCardButton.Active = true
+RedCardButton.Selectable = true
+RedCardButton.AutoButtonColor = true  -- 显示点击反馈
 RedCardButton.Parent = ButtonContainer
 
--- 蓝卡按钮（放大）
+-- 蓝卡按钮（修复交互）
 local BlueCardButton = Instance.new("TextButton")
 BlueCardButton.Size = UDim2.new(1, -20, 0, 35)
 BlueCardButton.Position = UDim2.new(0, 10, 0, 80)
-BlueCardButton.BackgroundColor3 = SPECIAL_ITEMS["Police Armory Keycard"].color
+BlueCardButton.BackgroundColor3 = _G.SPECIAL_ITEMS["Police Armory Keycard"].color
 BlueCardButton.TextColor3 = Color3.new(1, 1, 1)
 BlueCardButton.Font = Enum.Font.Gotham
 BlueCardButton.TextSize = 16
-BlueCardButton.Text = "移出 " .. SPECIAL_ITEMS["Police Armory Keycard"].name
+BlueCardButton.Text = "移出 " .. _G.SPECIAL_ITEMS["Police Armory Keycard"].name
+BlueCardButton.Active = true
+BlueCardButton.Selectable = true
+BlueCardButton.AutoButtonColor = true
 BlueCardButton.Parent = ButtonContainer
 
--- 立即换服按钮（放大）
+-- 立即换服按钮（修复交互）
 local HopServerButton = Instance.new("TextButton")
 HopServerButton.Size = UDim2.new(1, -20, 0, 35)
 HopServerButton.Position = UDim2.new(0, 10, 0, 125)
@@ -89,21 +103,27 @@ HopServerButton.TextColor3 = Color3.new(1, 1, 1)
 HopServerButton.Font = Enum.Font.Gotham
 HopServerButton.TextSize = 16
 HopServerButton.Text = "立即换服"
+HopServerButton.Active = true
+HopServerButton.Selectable = true
+HopServerButton.AutoButtonColor = true
 HopServerButton.Parent = ButtonContainer
 
--- 定义全局变量供代码二调用（修复210行变量未定义报错）
+-- 全局变量共享（确保代码二可访问）
 _G.itemFilters = itemFilters
 _G.RedCardButton = RedCardButton
 _G.BlueCardButton = BlueCardButton
 _G.HopServerButton = HopServerButton
--- 修复210行报错：声明_place变量（原代码未定义）
-local _place = game.PlaceId
+-- 修复219行报错：补充缺失的Http服务声明
+local Http = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local _place = game.PlaceId  -- 确保_place已定义
 
--- 修复114行报错：定义performServerHop函数
+-- 执行换服函数
 local function performServerHop()
     local targetServer = getRandomServer()
     if targetServer then
-        -- 换服前保存过滤状态到数据存储
+        -- 保存过滤状态
         local playerData = game:GetService("DataStoreService"):GetDataStore("PlayerFilters")
         pcall(function()
             playerData:SetAsync(LocalPlayer.UserId .. "_filters", _G.itemFilters)
@@ -119,17 +139,17 @@ local function performServerHop()
     end
 end
 
--- 按钮事件（红卡）
+-- 红卡按钮事件（使用全局SPECIAL_ITEMS）
 _G.RedCardButton.MouseButton1Click:Connect(function()
     _G.itemFilters["Military Armory Keycard"] = not _G.itemFilters["Military Armory Keycard"]
-    _G.RedCardButton.Text = (_G.itemFilters["Military Armory Keycard"] and "启用 " or "移出 ") .. SPECIAL_ITEMS["Military Armory Keycard"].name
+    _G.RedCardButton.Text = (_G.itemFilters["Military Armory Keycard"] and "启用 " or "移出 ") .. _G.SPECIAL_ITEMS["Military Armory Keycard"].name
     _G.RedCardButton.BackgroundTransparency = _G.itemFilters["Military Armory Keycard"] and 0.5 or 0
 end)
 
--- 按钮事件（蓝卡）
+-- 蓝卡按钮事件
 _G.BlueCardButton.MouseButton1Click:Connect(function()
     _G.itemFilters["Police Armory Keycard"] = not _G.itemFilters["Police Armory Keycard"]
-    _G.BlueCardButton.Text = (_G.itemFilters["Police Armory Keycard"] and "启用 " or "移出 ") .. SPECIAL_ITEMS["Police Armory Keycard"].name
+    _G.BlueCardButton.Text = (_G.itemFilters["Police Armory Keycard"] and "启用 " or "移出 ") .. _G.SPECIAL_ITEMS["Police Armory Keycard"].name
     _G.BlueCardButton.BackgroundTransparency = _G.itemFilters["Police Armory Keycard"] and 0.5 or 0
 end)
 
@@ -196,13 +216,14 @@ local function getRandomServer()
     return Server
 end
 
--- 主脚本字符串（包含过滤状态恢复逻辑）
+-- 主脚本字符串（更新github链接）
 local MainScript = [[
     local Players = game:GetService("Players")
     local LocalPlayer = Players.LocalPlayer
     local DataStoreService = game:GetService("DataStoreService")
+    local Http = game:GetService("HttpService")  -- 内部声明Http服务
     
-    -- 恢复换服前的过滤状态
+    -- 恢复过滤状态
     local playerData = DataStoreService:GetDataStore("PlayerFilters")
     local savedFilters = nil
     pcall(function()
@@ -212,6 +233,7 @@ local MainScript = [[
         _G.itemFilters = savedFilters
     end
     
+    -- 更新为新链接
     loadstring(game:HttpGet("https://raw.githubusercontent.com/xiaoling-create/Roblox/refs/heads/main/Starrain%E5%8D%B0%E9%92%9E%E6%9C%BA%E6%B5%8B%E8%AF%95.lua"))()
 ]]
 
@@ -252,17 +274,121 @@ local function safeTeleport(targetCFrame, character)
     return true
 end
 
--- 后续逻辑（物品查找、拾取等）与主函数调用...
+-- 物品查找与拾取逻辑
 local function findAllTargetItems()
-    -- 保持原有逻辑...
+    local targetItems = {}
+    if workspace:FindFirstChild("Game") and workspace.Game:FindFirstChild("Entities") and workspace.Game.Entities:FindFirstChild("ItemPickup") then
+        for _, v in ipairs(workspace.Game.Entities.ItemPickup:GetChildren()) do
+            local primaryPart = v.PrimaryPart
+            if primaryPart then
+                local prompt = primaryPart:FindFirstChildOfClass("ProximityPrompt")
+                if prompt and table.find(TARGET_ITEMS, prompt.ObjectText) then
+                    if _G.itemFilters[prompt.ObjectText] then
+                        continue
+                    end
+                    local isSpecial = _G.SPECIAL_ITEMS[prompt.ObjectText] ~= nil
+                    table.insert(targetItems, {
+                        part = primaryPart,
+                        prompt = prompt,
+                        instance = v,
+                        type = prompt.ObjectText,
+                        isSpecial = isSpecial
+                    })
+                end
+            end
+        end
+    end
+    return targetItems
 end
 
 local function collectItem(item, character)
-    -- 保持原有逻辑...
+    if _G.itemFilters[item.type] then
+        warn("物品已被过滤：" .. item.type)
+        return true
+    end
+    if not character or not item.instance:IsDescendantOf(game) then return true end
+    local targetCFrame = item.part.CFrame * CFrame.new(0, 1, -3)
+    local success = safeTeleport(targetCFrame, character)
+    if not success then return false end
+    task.wait(0.5)
+    local interactSuccess = pcall(function()
+        fireproximityprompt(item.prompt, 1)
+    end)
+    if interactSuccess then
+        task.wait(1)
+        return not item.instance:IsDescendantOf(game)
+    else
+        warn("拾取失败：" .. item.type)
+        return false
+    end
 end
 
 local function main()
-    -- 保持原有逻辑...
+    local allItems = findAllTargetItems()
+    if #allItems == 0 then
+        print("无目标物品，换服...")
+        performServerHop()
+        return
+    end
+    local itemCounts = {}
+    for _, item in ipairs(allItems) do
+        itemCounts[item.type] = (itemCounts[item.type] or 0) + 1
+    end
+    local countText = {}
+    for k, v in pairs(itemCounts) do
+        table.insert(countText, k .. "：" .. v .. "个")
+    end
+    print("发现物品：" .. table.concat(countText, "，"))
+    
+    local failedItems = {}
+    for i, item in ipairs(allItems) do
+        if _G.itemFilters[item.type] then continue end
+        print("拾取 " .. i .. "/" .. #allItems .. "（" .. item.type .. "）")
+        local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+        local success = collectItem(item, character)
+        if not success then
+            warn("重试拾取：" .. item.type)
+            task.wait(2)
+            success = collectItem(item, character)
+            if not success then
+                table.insert(failedItems, item)
+            end
+        end
+    end
+    
+    if #failedItems > 0 then
+        local hasSpecialFailed = false
+        for _, item in ipairs(failedItems) do
+            if item.isSpecial and not _G.itemFilters[item.type] then
+                hasSpecialFailed = true
+                break
+            end
+        end
+        if hasSpecialFailed then
+            print("特殊物品拾取失败，" .. SPECIAL_ITEM_TIMEOUT .. "秒后换服")
+            task.wait(SPECIAL_ITEM_TIMEOUT)
+            performServerHop()
+            return
+        end
+        local finalFailed = {}
+        for _, item in ipairs(failedItems) do
+            if _G.itemFilters[item.type] then continue end
+            local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+            local success = collectItem(item, character)
+            if not success then
+                table.insert(finalFailed, item)
+            end
+        end
+        if #finalFailed > 0 then
+            print("普通物品拾取失败，" .. NORMAL_ITEM_TIMEOUT .. "秒后换服")
+            task.wait(NORMAL_ITEM_TIMEOUT)
+            performServerHop()
+            return
+        end
+    end
+    
+    print("所有物品拾取完成，换服...")
+    performServerHop()
 end
 
 main()
