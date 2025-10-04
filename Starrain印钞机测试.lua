@@ -5,8 +5,8 @@ local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local UserInputService = game:GetService("UserInputService")
 
--- 配置变量
-local TARGET_ITEMS = {
+-- 配置变量（全局共享TARGET_ITEMS解决241行报错）
+_G.TARGET_ITEMS = {
     "Money Printer", "Blue Candy Cane", "Bunny Balloon", "Ghost Balloon", "Clover Balloon",
     "Bat Balloon", "Gold Clover Balloon", "Golden Rose", "Black Rose", "Heart Balloon",
     "Diamond Ring", "Diamond", "Void Gem", "Dark Matter Gem", "Rollie", "NextBot Grenade",
@@ -20,15 +20,15 @@ _G.SPECIAL_ITEMS = {
     ["Police Armory Keycard"] = {name = "蓝卡", color = Color3.new(0, 0, 1)}
 }
 
+-- 超时配置（全局共享）
+_G.SPECIAL_ITEM_TIMEOUT = 5
+_G.NORMAL_ITEM_TIMEOUT = 180
+
 -- 物品过滤状态 (true = 不拾取)
 local itemFilters = {
     ["Military Armory Keycard"] = false,
     ["Police Armory Keycard"] = false
 }
-
--- 超时配置
-local SPECIAL_ITEM_TIMEOUT = 5
-local NORMAL_ITEM_TIMEOUT = 180
 
 -- 清除旧UI防止冲突
 local oldGui = LocalPlayer:FindFirstChild("PlayerGui"):FindFirstChild("ItemCollectorUI")
@@ -36,14 +36,14 @@ if oldGui then
     oldGui:Destroy()
 end
 
--- 创建UI（修复交互问题）
+-- 创建UI
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "ItemCollectorUI"
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.IgnoreGuiInset = true
 
--- 按钮容器（确保可交互）
+-- 按钮容器
 local ButtonContainer = Instance.new("Frame")
 ButtonContainer.Size = UDim2.new(0, 280, 0, 160)
 ButtonContainer.Position = UDim2.new(0.95, -280, 0.5, -80)
@@ -52,7 +52,7 @@ ButtonContainer.BackgroundColor3 = Color3.new(0, 0, 0)
 ButtonContainer.BorderSizePixel = 3
 ButtonContainer.BorderColor3 = Color3.new(0.7, 0.7, 0.7)
 ButtonContainer.ClipsDescendants = true
-ButtonContainer.Active = true  -- 允许交互
+ButtonContainer.Active = true
 ButtonContainer.Selectable = true
 ButtonContainer.Parent = ScreenGui
 
@@ -66,7 +66,7 @@ TitleLabel.Font = Enum.Font.GothamBold
 TitleLabel.TextSize = 18
 TitleLabel.Parent = ButtonContainer
 
--- 红卡按钮（修复交互）
+-- 红卡按钮
 local RedCardButton = Instance.new("TextButton")
 RedCardButton.Size = UDim2.new(1, -20, 0, 35)
 RedCardButton.Position = UDim2.new(0, 10, 0, 35)
@@ -77,10 +77,10 @@ RedCardButton.TextSize = 16
 RedCardButton.Text = "移出 " .. _G.SPECIAL_ITEMS["Military Armory Keycard"].name
 RedCardButton.Active = true
 RedCardButton.Selectable = true
-RedCardButton.AutoButtonColor = true  -- 显示点击反馈
+RedCardButton.AutoButtonColor = true
 RedCardButton.Parent = ButtonContainer
 
--- 蓝卡按钮（修复交互）
+-- 蓝卡按钮
 local BlueCardButton = Instance.new("TextButton")
 BlueCardButton.Size = UDim2.new(1, -20, 0, 35)
 BlueCardButton.Position = UDim2.new(0, 10, 0, 80)
@@ -94,7 +94,7 @@ BlueCardButton.Selectable = true
 BlueCardButton.AutoButtonColor = true
 BlueCardButton.Parent = ButtonContainer
 
--- 立即换服按钮（修复交互）
+-- 立即换服按钮
 local HopServerButton = Instance.new("TextButton")
 HopServerButton.Size = UDim2.new(1, -20, 0, 35)
 HopServerButton.Position = UDim2.new(0, 10, 0, 125)
@@ -108,22 +108,23 @@ HopServerButton.Selectable = true
 HopServerButton.AutoButtonColor = true
 HopServerButton.Parent = ButtonContainer
 
--- 全局变量共享（确保代码二可访问）
+-- 全局变量共享
 _G.itemFilters = itemFilters
 _G.RedCardButton = RedCardButton
 _G.BlueCardButton = BlueCardButton
 _G.HopServerButton = HopServerButton
--- 修复219行报错：补充缺失的Http服务声明
+-- 服务声明
 local Http = game:GetService("HttpService")
 local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
-local _place = game.PlaceId  -- 确保_place已定义
+local _place = game.PlaceId
 
 -- 执行换服函数
 local function performServerHop()
     local targetServer = getRandomServer()
     if targetServer then
-        -- 保存过滤状态
         local playerData = game:GetService("DataStoreService"):GetDataStore("PlayerFilters")
         pcall(function()
             playerData:SetAsync(LocalPlayer.UserId .. "_filters", _G.itemFilters)
@@ -139,7 +140,7 @@ local function performServerHop()
     end
 end
 
--- 红卡按钮事件（使用全局SPECIAL_ITEMS）
+-- 红卡按钮事件
 _G.RedCardButton.MouseButton1Click:Connect(function()
     _G.itemFilters["Military Armory Keycard"] = not _G.itemFilters["Military Armory Keycard"]
     _G.RedCardButton.Text = (_G.itemFilters["Military Armory Keycard"] and "启用 " or "移出 ") .. _G.SPECIAL_ITEMS["Military Armory Keycard"].name
@@ -216,14 +217,13 @@ local function getRandomServer()
     return Server
 end
 
--- 主脚本字符串（更新github链接）
+-- 主脚本字符串
 local MainScript = [[
     local Players = game:GetService("Players")
     local LocalPlayer = Players.LocalPlayer
     local DataStoreService = game:GetService("DataStoreService")
-    local Http = game:GetService("HttpService")  -- 内部声明Http服务
+    local Http = game:GetService("HttpService")
     
-    -- 恢复过滤状态
     local playerData = DataStoreService:GetDataStore("PlayerFilters")
     local savedFilters = nil
     pcall(function()
@@ -233,7 +233,6 @@ local MainScript = [[
         _G.itemFilters = savedFilters
     end
     
-    -- 更新为新链接
     loadstring(game:HttpGet("https://raw.githubusercontent.com/xiaoling-create/Roblox/refs/heads/main/Starrain%E5%8D%B0%E9%92%9E%E6%9C%BA%E6%B5%8B%E8%AF%95.lua"))()
 ]]
 
@@ -274,7 +273,7 @@ local function safeTeleport(targetCFrame, character)
     return true
 end
 
--- 物品查找与拾取逻辑
+-- 物品查找与拾取逻辑（修复241行：使用全局_G.TARGET_ITEMS）
 local function findAllTargetItems()
     local targetItems = {}
     if workspace:FindFirstChild("Game") and workspace.Game:FindFirstChild("Entities") and workspace.Game.Entities:FindFirstChild("ItemPickup") then
@@ -282,7 +281,8 @@ local function findAllTargetItems()
             local primaryPart = v.PrimaryPart
             if primaryPart then
                 local prompt = primaryPart:FindFirstChildOfClass("ProximityPrompt")
-                if prompt and table.find(TARGET_ITEMS, prompt.ObjectText) then
+                -- 修复241行：TARGET_ITEMS未定义，改为全局变量_G.TARGET_ITEMS
+                if prompt and table.find(_G.TARGET_ITEMS, prompt.ObjectText) then
                     if _G.itemFilters[prompt.ObjectText] then
                         continue
                     end
@@ -365,8 +365,8 @@ local function main()
             end
         end
         if hasSpecialFailed then
-            print("特殊物品拾取失败，" .. SPECIAL_ITEM_TIMEOUT .. "秒后换服")
-            task.wait(SPECIAL_ITEM_TIMEOUT)
+            print("特殊物品拾取失败，" .. _G.SPECIAL_ITEM_TIMEOUT .. "秒后换服")
+            task.wait(_G.SPECIAL_ITEM_TIMEOUT)
             performServerHop()
             return
         end
@@ -380,8 +380,8 @@ local function main()
             end
         end
         if #finalFailed > 0 then
-            print("普通物品拾取失败，" .. NORMAL_ITEM_TIMEOUT .. "秒后换服")
-            task.wait(NORMAL_ITEM_TIMEOUT)
+            print("普通物品拾取失败，" .. _G.NORMAL_ITEM_TIMEOUT .. "秒后换服")
+            task.wait(_G.NORMAL_ITEM_TIMEOUT)
             performServerHop()
             return
         end
