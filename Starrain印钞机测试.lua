@@ -4,7 +4,8 @@ local TeleportService = game:GetService("TeleportService")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Parent = game:GetService("CoreGui")
+ScreenGui.Name = "CustomUI"
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")  -- 改为PlayerGui，确保UI可见且可交互
 
 -- 配置变量
 local ignoreRedCard = false  -- 是否忽略红卡拾取
@@ -19,36 +20,51 @@ local TARGET_ITEMS = {
     "Easter Basket", "Military Armory Keycard", "Treasure Map",  "Holy Grail"
 }
 
--- 创建按钮函数（简化参数传递）
+-- 创建按钮函数（确保交互正常）
 local function createButton(name, x, y, width, height, text, callback)
     local button = Instance.new("TextButton")
     button.Name = name
-    button.Position = UDim2.new(0, x, 0, y)  -- 直接使用屏幕像素坐标
-    button.Size = UDim2.new(0, width, 0, height)  -- 直接使用像素尺寸
+    button.Position = UDim2.new(0, x, 0, y)
+    button.Size = UDim2.new(0, width, 0, height)
     button.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
     button.BorderColor3 = Color3.new(1, 1, 1)
     button.BorderSizePixel = 1
     button.Text = text
     button.TextColor3 = Color3.new(1, 1, 1)
     button.TextScaled = true
-    button.Parent = ScreenGui
+    button.AutoButtonColor = true  -- 启用按钮颜色反馈
+    button.Selectable = true  -- 允许选中
+    button.ZIndex = 10  -- 确保按钮在顶层
     
-    button.MouseButton1Click:Connect(callback)
+    -- 绑定点击事件（使用ConnectParallel确保响应）
+    button.MouseButton1Click:ConnectParallel(callback)
+    
+    button.Parent = ScreenGui
     return button
 end
 
--- 屏幕右侧按钮位置计算（使用绝对像素值）
-local screenWidth = game:GetService("GuiService"):GetScreenResolution().X
-local buttonX = screenWidth - 120  -- 右侧距离边缘20像素，按钮宽100
+-- 等待屏幕分辨率加载完成
+local GuiService = game:GetService("GuiService")
+local screenWidth, screenHeight = GuiService:GetScreenResolution()
+while not screenWidth do
+    task.wait(0.1)
+    screenWidth, screenHeight = GuiService:GetScreenResolution()
+end
+
+-- 按钮位置计算
+local buttonX = screenWidth - 120  -- 右侧留出20像素
 local buttonWidth = 100
 local buttonHeight = 40
 local buttonSpacing = 10
 
--- 创建"移出红卡"按钮（第50行相关位置，参数完全为数值）
-local removeRedCardBtn = createButton(
+-- 存储按钮引用的变量（确保全局可访问）
+local removeRedCardBtn, toggleHopBtn, instantHopBtn
+
+-- 创建"移出红卡"按钮
+removeRedCardBtn = createButton(
     "RemoveRedCardBtn",
-    buttonX,  -- X坐标
-    20,       -- Y坐标
+    buttonX,
+    20,
     buttonWidth,
     buttonHeight,
     "移出红卡",
@@ -60,7 +76,7 @@ local removeRedCardBtn = createButton(
 )
 
 -- 创建"停止换服"按钮
-local toggleHopBtn = createButton(
+toggleHopBtn = createButton(
     "ToggleHopBtn",
     buttonX,
     20 + buttonHeight + buttonSpacing,
@@ -76,7 +92,7 @@ local toggleHopBtn = createButton(
 )
 
 -- 创建"立即换服"按钮
-local instantHopBtn = createButton(
+instantHopBtn = createButton(
     "InstantHopBtn",
     buttonX,
     20 + 2*(buttonHeight + buttonSpacing),
@@ -97,6 +113,14 @@ local instantHopBtn = createButton(
         end
     end
 )
+
+-- 确保按钮在界面层级顶层
+local function bringButtonsToFront()
+    removeRedCardBtn.ZIndex = 100
+    toggleHopBtn.ZIndex = 100
+    instantHopBtn.ZIndex = 100
+end
+bringButtonsToFront()
 
 local function simulateMovement()
     local character = LocalPlayer.Character
@@ -339,4 +363,5 @@ local function main()
     end
 end
 
-main()
+-- 确保UI初始化完成后再运行主逻辑
+task.spawn(main)
