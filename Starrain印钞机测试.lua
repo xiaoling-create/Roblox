@@ -3,7 +3,6 @@ local Players = game:GetService("Players")
 local TeleportService = game:GetService("TeleportService")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
-local GuiService = game:GetService("GuiService")
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Parent = game:GetService("CoreGui")
 
@@ -20,12 +19,12 @@ local TARGET_ITEMS = {
     "Easter Basket", "Military Armory Keycard", "Treasure Map",  "Holy Grail"
 }
 
--- 创建按钮函数
-local function createButton(name, position, size, text, callback)
+-- 创建按钮函数（简化参数传递）
+local function createButton(name, x, y, width, height, text, callback)
     local button = Instance.new("TextButton")
     button.Name = name
-    button.Position = position
-    button.Size = size
+    button.Position = UDim2.new(0, x, 0, y)  -- 直接使用屏幕像素坐标
+    button.Size = UDim2.new(0, width, 0, height)  -- 直接使用像素尺寸
     button.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
     button.BorderColor3 = Color3.new(1, 1, 1)
     button.BorderSizePixel = 1
@@ -38,18 +37,20 @@ local function createButton(name, position, size, text, callback)
     return button
 end
 
--- 计算屏幕右侧位置
-local screenWidth = GuiService:GetScreenResolution().X
-local buttonX = UDim.new(1, -120)  -- 右侧留出100像素
-local buttonWidth = UDim.new(0, 100)
-local buttonHeight = UDim.new(0, 40)
+-- 屏幕右侧按钮位置计算（使用绝对像素值）
+local screenWidth = game:GetService("GuiService"):GetScreenResolution().X
+local buttonX = screenWidth - 120  -- 右侧距离边缘20像素，按钮宽100
+local buttonWidth = 100
+local buttonHeight = 40
 local buttonSpacing = 10
 
--- 创建"移出红卡"按钮
+-- 创建"移出红卡"按钮（第50行相关位置，参数完全为数值）
 local removeRedCardBtn = createButton(
     "RemoveRedCardBtn",
-    UDim2.new(buttonX, UDim.new(0, 20)),
-    UDim2.new(buttonWidth, buttonHeight),
+    buttonX,  -- X坐标
+    20,       -- Y坐标
+    buttonWidth,
+    buttonHeight,
     "移出红卡",
     function()
         ignoreRedCard = not ignoreRedCard
@@ -61,8 +62,10 @@ local removeRedCardBtn = createButton(
 -- 创建"停止换服"按钮
 local toggleHopBtn = createButton(
     "ToggleHopBtn",
-    UDim2.new(buttonX, UDim.new(0, 20 + buttonHeight + buttonSpacing)),
-    UDim2.new(buttonWidth, buttonHeight),
+    buttonX,
+    20 + buttonHeight + buttonSpacing,
+    buttonWidth,
+    buttonHeight,
     "停止换服",
     function()
         allowServerHop = not allowServerHop
@@ -75,8 +78,10 @@ local toggleHopBtn = createButton(
 -- 创建"立即换服"按钮
 local instantHopBtn = createButton(
     "InstantHopBtn",
-    UDim2.new(buttonX, UDim.new(0, 20 + 2*(buttonHeight + buttonSpacing))),
-    UDim2.new(buttonWidth, buttonHeight),
+    buttonX,
+    20 + 2*(buttonHeight + buttonSpacing),
+    buttonWidth,
+    buttonHeight,
     "立即换服",
     function()
         if teleportInProgress then return end
