@@ -12,24 +12,59 @@ local TARGET_ITEMS = {
     "Easter Basket", "Military Armory Keycard", "Treasure Map",  "Holy Grail"
 }
 
--- 检测背包中是否有"Military Armory Keycard"
+-- 检测是否持有Military Armory Keycard（适配自定义物品栏）
+-- 尝试通过常见的自定义物品存储位置检测（根据游戏实际情况可能需要调整）
 local function hasMilitaryKeycard()
-    local backpack = LocalPlayer.Backpack
-    -- 检查背包
-    for _, item in ipairs(backpack:GetChildren()) do
-        if item:IsA("Tool") and item.Name == "Military Armory Keycard" then
-            return true
-        end
-    end
-    -- 检查是否在手中
-    local character = LocalPlayer.Character
-    if character then
-        for _, item in ipairs(character:GetChildren()) do
-            if item:IsA("Tool") and item.Name == "Military Armory Keycard" then
-                return true
+    -- 尝试1：检测玩家数据中的物品列表（常见于自定义系统）
+    local playerData = LocalPlayer:FindFirstChild("Data") or LocalPlayer:FindFirstChild("PlayerData")
+    if playerData then
+        local itemsFolder = playerData:FindFirstChild("Items") or playerData:FindFirstChild("Inventory")
+        if itemsFolder then
+            for _, item in ipairs(itemsFolder:GetChildren()) do
+                -- 假设物品名称或属性包含目标名称
+                if item.Name == "Military Armory Keycard" or (item:FindFirstChild("Name") and item.Name.Value == "Military Armory Keycard") then
+                    return true
+                end
             end
         end
     end
+
+    -- 尝试2：检测客户端物品栏GUI对应的后端数据（部分游戏通过GUI绑定数据）
+    local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+    if playerGui then
+        local inventoryGui = playerGui:FindFirstChild("Inventory") or playerGui:FindFirstChild("BackpackGui")
+        if inventoryGui then
+            -- 假设GUI中存储了物品数据的脚本或值
+            local itemData = inventoryGui:FindFirstChild("ItemData")
+            if itemData and itemData:IsA("StringValue") then
+                -- 假设数据是JSON格式，尝试解析
+                local success, data = pcall(function()
+                    return Http:JSONDecode(itemData.Value)
+                end)
+                if success and type(data) == "table" then
+                    for _, item in ipairs(data) do
+                        if item.name == "Military Armory Keycard" then
+                            return true
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- 尝试3：检测角色上的自定义工具挂载点（非默认Tool类型）
+    local character = LocalPlayer.Character
+    if character then
+        local customTools = character:FindFirstChild("CustomTools") or character:FindFirstChild("Equipment")
+        if customTools then
+            for _, item in ipairs(customTools:GetChildren()) do
+                if item.Name == "Military Armory Keycard" then
+                    return true
+                end
+            end
+        end
+    end
+
     return false
 end
 
@@ -92,7 +127,7 @@ until not (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Force
 
 -- 检查是否已有Military Armory Keycard，有则直接换服
 if hasMilitaryKeycard() then
-    print("检测到背包中已有Military Armory Keycard，准备换服...")
+    print("检测到已持有Military Armory Keycard，准备换服...")
     local targetServer = getRandomServer()
     if targetServer then
         queue_on_teleport(MainScript)
@@ -249,12 +284,12 @@ local function main()
     end
 
     if #failedItems > 0 then
-        print("存在无法拾取的物品，将在3分钟后换服：")  -- 修改为3分钟
+        print("存在无法拾取的物品，将在3分钟后换服：")
         for _, item in ipairs(failedItems) do
             print("- " .. item.type)
         end
         
-        task.wait(180)  -- 3分钟（180秒）
+        task.wait(180)
         if targetServer then
             print("3分钟超时，执行换服...")
             queue_on_teleport(MainScript)
