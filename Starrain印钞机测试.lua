@@ -3,14 +3,6 @@ local Players = game:GetService("Players")
 local TeleportService = game:GetService("TeleportService")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "CustomUI"
-ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")  -- 改为PlayerGui，确保UI可见且可交互
-
--- 配置变量
-local ignoreRedCard = false  -- 是否忽略红卡拾取
-local allowServerHop = true  -- 是否允许换服
-local teleportInProgress = false  -- 换服是否进行中
 
 local TARGET_ITEMS = {
     "Money Printer", "Blue Candy Cane", "Bunny Balloon", "Ghost Balloon", "Clover Balloon",
@@ -20,107 +12,26 @@ local TARGET_ITEMS = {
     "Easter Basket", "Military Armory Keycard", "Treasure Map",  "Holy Grail"
 }
 
--- 创建按钮函数（确保交互正常）
-local function createButton(name, x, y, width, height, text, callback)
-    local button = Instance.new("TextButton")
-    button.Name = name
-    button.Position = UDim2.new(0, x, 0, y)
-    button.Size = UDim2.new(0, width, 0, height)
-    button.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
-    button.BorderColor3 = Color3.new(1, 1, 1)
-    button.BorderSizePixel = 1
-    button.Text = text
-    button.TextColor3 = Color3.new(1, 1, 1)
-    button.TextScaled = true
-    button.AutoButtonColor = true  -- 启用按钮颜色反馈
-    button.Selectable = true  -- 允许选中
-    button.ZIndex = 10  -- 确保按钮在顶层
-    
-    -- 绑定点击事件（使用ConnectParallel确保响应）
-    button.MouseButton1Click:ConnectParallel(callback)
-    
-    button.Parent = ScreenGui
-    return button
-end
-
--- 等待屏幕分辨率加载完成
-local GuiService = game:GetService("GuiService")
-local screenWidth, screenHeight = GuiService:GetScreenResolution()
-while not screenWidth do
-    task.wait(0.1)
-    screenWidth, screenHeight = GuiService:GetScreenResolution()
-end
-
--- 按钮位置计算
-local buttonX = screenWidth - 120  -- 右侧留出20像素
-local buttonWidth = 100
-local buttonHeight = 40
-local buttonSpacing = 10
-
--- 存储按钮引用的变量（确保全局可访问）
-local removeRedCardBtn, toggleHopBtn, instantHopBtn
-
--- 创建"移出红卡"按钮
-removeRedCardBtn = createButton(
-    "RemoveRedCardBtn",
-    buttonX,
-    20,
-    buttonWidth,
-    buttonHeight,
-    "移出红卡",
-    function()
-        ignoreRedCard = not ignoreRedCard
-        removeRedCardBtn.BackgroundColor3 = ignoreRedCard and Color3.new(0, 1, 0) or Color3.new(0.2, 0.2, 0.2)
-        print(ignoreRedCard and "已启用忽略红卡" or "已禁用忽略红卡")
-    end
-)
-
--- 创建"停止换服"按钮
-toggleHopBtn = createButton(
-    "ToggleHopBtn",
-    buttonX,
-    20 + buttonHeight + buttonSpacing,
-    buttonWidth,
-    buttonHeight,
-    "停止换服",
-    function()
-        allowServerHop = not allowServerHop
-        toggleHopBtn.Text = allowServerHop and "停止换服" or "启动换服"
-        toggleHopBtn.BackgroundColor3 = allowServerHop and Color3.new(0.2, 0.2, 0.2) or Color3.new(1, 0, 0)
-        print(allowServerHop and "已启用换服功能" or "已禁用换服功能")
-    end
-)
-
--- 创建"立即换服"按钮
-instantHopBtn = createButton(
-    "InstantHopBtn",
-    buttonX,
-    20 + 2*(buttonHeight + buttonSpacing),
-    buttonWidth,
-    buttonHeight,
-    "立即换服",
-    function()
-        if teleportInProgress then return end
-        print("触发立即换服...")
-        local targetServer = getRandomServer()
-        if targetServer then
-            teleportInProgress = true
-            queue_on_teleport(MainScript)
-            task.wait(1)
-            TeleportService:TeleportToPlaceInstance(_place, targetServer.id, LocalPlayer)
-        else
-            warn("没有可用服务器进行立即换服")
+-- 检测背包中是否有"Military Armory Keycard"
+local function hasMilitaryKeycard()
+    local backpack = LocalPlayer.Backpack
+    -- 检查背包
+    for _, item in ipairs(backpack:GetChildren()) do
+        if item:IsA("Tool") and item.Name == "Military Armory Keycard" then
+            return true
         end
     end
-)
-
--- 确保按钮在界面层级顶层
-local function bringButtonsToFront()
-    removeRedCardBtn.ZIndex = 100
-    toggleHopBtn.ZIndex = 100
-    instantHopBtn.ZIndex = 100
+    -- 检查是否在手中
+    local character = LocalPlayer.Character
+    if character then
+        for _, item in ipairs(character:GetChildren()) do
+            if item:IsA("Tool") and item.Name == "Military Armory Keycard" then
+                return true
+            end
+        end
+    end
+    return false
 end
-bringButtonsToFront()
 
 local function simulateMovement()
     local character = LocalPlayer.Character
@@ -179,6 +90,20 @@ repeat
     task.wait(0.01)
 until not (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("ForceField"))
 
+-- 检查是否已有Military Armory Keycard，有则直接换服
+if hasMilitaryKeycard() then
+    print("检测到背包中已有Military Armory Keycard，准备换服...")
+    local targetServer = getRandomServer()
+    if targetServer then
+        queue_on_teleport(MainScript)
+        task.wait(1)
+        TeleportService:TeleportToPlaceInstance(_place, targetServer.id, LocalPlayer)
+    else
+        warn("检测到Military Armory Keycard但无可用服务器")
+    end
+    return
+end
+
 local function safeTeleport(targetCFrame, character)
     local rootPart = character:FindFirstChild("HumanoidRootPart")
     local humanoid = character:FindFirstChildOfClass("Humanoid")
@@ -206,15 +131,12 @@ local function findAllTargetItems()
             if primaryPart then
                 local prompt = primaryPart:FindFirstChildOfClass("ProximityPrompt")
                 if prompt and table.find(TARGET_ITEMS, prompt.ObjectText) then
-                    -- 如果启用了忽略红卡，跳过红卡物品
-                    if not (ignoreRedCard and prompt.ObjectText == "Military Armory Keycard") then
-                        table.insert(targetItems, {
-                            part = primaryPart,
-                            prompt = prompt,
-                            instance = v,
-                            type = prompt.ObjectText
-                        })
-                    end
+                    table.insert(targetItems, {
+                        part = primaryPart,
+                        prompt = prompt,
+                        instance = v,
+                        type = prompt.ObjectText
+                    })
                 end
             end
         end
@@ -251,117 +173,106 @@ local function collectItem(item, character)
     end
 end
 
-local function performServerHop()
-    if not allowServerHop or teleportInProgress then return end
-    
-    local targetServer = getRandomServer()
-    if targetServer then
-        teleportInProgress = true
-        queue_on_teleport(MainScript)
-        task.wait(1)
-        TeleportService:TeleportToPlaceInstance(_place, targetServer.id, LocalPlayer)
-    else
-        warn("没有可用服务器进行换服")
-    end
-end
-
 local function main()
-    while true do
-        if teleportInProgress then break end
-        
-        local allItems = findAllTargetItems()
-        local targetServer = allowServerHop and getRandomServer() or nil
+    local allItems = findAllTargetItems()
+    local targetServer = getRandomServer()
 
-        if #allItems == 0 then
-            print("未检测到任何目标物品，准备换服...")
-            if allowServerHop then
-                performServerHop()
+    if #allItems == 0 then
+        print("未检测到任何目标物品，准备换服...")
+        if targetServer then
+            queue_on_teleport(MainScript)
+            task.wait(1)
+            TeleportService:TeleportToPlaceInstance(_place, targetServer.id, LocalPlayer)
+        else
+            warn("未检测到物品且无可用服务器")
+        end
+        return
+    end
+
+    local itemCounts = {}
+    for _, item in ipairs(allItems) do
+        itemCounts[item.type] = (itemCounts[item.type] or 0) + 1
+    end
+    local countText = {}
+    for itemType, count in pairs(itemCounts) do
+        table.insert(countText, itemType .. "：" .. count .. "个")
+    end
+    print("发现目标物品：" .. table.concat(countText, "，") .. "，开始拾取...")
+
+    local normalItems = {}
+    local failedItems = {}
+
+    for i, item in ipairs(allItems) do
+        -- 再次检查是否已获得Military Armory Keycard，有则停止拾取并换服
+        if hasMilitaryKeycard() then
+            print("拾取过程中获得了Military Armory Keycard，准备换服...")
+            if targetServer then
+                queue_on_teleport(MainScript)
+                task.wait(1)
+                TeleportService:TeleportToPlaceInstance(_place, targetServer.id, LocalPlayer)
             else
-                print("换服功能已禁用，等待物品刷新...")
-                task.wait(10)
+                warn("获得Military Armory Keycard但无可用服务器")
             end
-            continue
+            return
         end
-
-        local itemCounts = {}
-        for _, item in ipairs(allItems) do
-            itemCounts[item.type] = (itemCounts[item.type] or 0) + 1
-        end
-        local countText = {}
-        for itemType, count in pairs(itemCounts) do
-            table.insert(countText, itemType .. "：" .. count .. "个")
-        end
-        print("发现目标物品：" .. table.concat(countText, "，") .. "，开始拾取...")
-
-        local normalItems = {}
-        local failedItems = {}
-        local hasFailedMilitaryKeycard = false
-
-        for i, item in ipairs(allItems) do
-            -- 如果启用了忽略红卡，跳过红卡物品
-            if ignoreRedCard and item.type == "Military Armory Keycard" then
-                print("已忽略红卡拾取")
-                continue
-            end
-            
-            print("正在拾取 " .. i .. "/" .. #allItems .. "（" .. item.type .. "）")
-            local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-            local success = collectItem(item, character)
-            
+        
+        print("正在拾取 " .. i .. "/" .. #allItems .. "（" .. item.type .. "）")
+        local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+        local success = collectItem(item, character)
+        
+        if not success then
+            warn("首次拾取失败，重试一次：" .. item.type)
+            task.wait(2)
+            success = collectItem(item, character)
             if not success then
-                warn("首次拾取失败，重试一次：" .. item.type)
-                task.wait(2)
-                success = collectItem(item, character)
-                if not success then
-                    warn("标记为无法拾取：" .. item.type)
-                    table.insert(failedItems, item)
-                    if item.type == "Military Armory Keycard" then
-                        hasFailedMilitaryKeycard = true
-                    end
-                else
-                    table.insert(normalItems, item) 
-                end
+                warn("标记为无法拾取：" .. item.type)
+                table.insert(failedItems, item) 
             else
                 table.insert(normalItems, item) 
             end
-        end
-
-        if hasFailedMilitaryKeycard and allowServerHop then
-            print("Military Armory Keycard 拾取失败，5秒后换服...")
-            task.wait(5)
-            performServerHop()
-            continue
-        end
-
-        if #failedItems > 0 and allowServerHop then
-            print("存在无法拾取的普通物品，3分钟后换服：")
-            for _, item in ipairs(failedItems) do
-                print("- " .. item.type)
-            end
-            
-            -- 3分钟等待期间检查是否禁用了换服
-            local waitTime = 180
-            local checkInterval = 5
-            while waitTime > 0 and allowServerHop do
-                task.wait(checkInterval)
-                waitTime -= checkInterval
-            end
-            
-            if allowServerHop then
-                print("3分钟超时，执行换服...")
-                performServerHop()
-            else
-                print("换服功能已禁用，停止换服倒计时")
-            end
-        elseif #failedItems == 0 and allowServerHop then
-            print("所有目标物品已拾取，准备换服...")
-            performServerHop()
         else
-            print("换服功能已禁用，继续等待...")
-            task.wait(10)
+            table.insert(normalItems, item) 
+        end
+    end
+
+    -- 检查是否在拾取后获得了Military Armory Keycard
+    if hasMilitaryKeycard() then
+        print("拾取完成后发现已获得Military Armory Keycard，准备换服...")
+        if targetServer then
+            queue_on_teleport(MainScript)
+            task.wait(1)
+            TeleportService:TeleportToPlaceInstance(_place, targetServer.id, LocalPlayer)
+        else
+            warn("获得Military Armory Keycard但无可用服务器")
+        end
+        return
+    end
+
+    if #failedItems > 0 then
+        print("存在无法拾取的物品，将在3分钟后换服：")  -- 修改为3分钟
+        for _, item in ipairs(failedItems) do
+            print("- " .. item.type)
+        end
+        
+        task.wait(180)  -- 3分钟（180秒）
+        if targetServer then
+            print("3分钟超时，执行换服...")
+            queue_on_teleport(MainScript)
+            task.wait(1)
+            TeleportService:TeleportToPlaceInstance(_place, targetServer.id, LocalPlayer)
+        else
+            warn("3分钟超时但无可用服务器")
+        end
+    else
+        print("所有目标物品已拾取，准备换服...")
+        if targetServer then
+            queue_on_teleport(MainScript)
+            task.wait(1)
+            TeleportService:TeleportToPlaceInstance(_place, targetServer.id, LocalPlayer)
+        else
+            warn("物品拾取完成，但未找到可用服务器")
         end
     end
 end
 
--- 确保UI初始化完成后再运行主逻辑
-task.spawn(main)
+main()
