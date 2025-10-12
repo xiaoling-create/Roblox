@@ -12,62 +12,6 @@ local TARGET_ITEMS = {
     "Easter Basket", "Military Armory Keycard", "Treasure Map",  "Holy Grail"
 }
 
--- 检测是否持有Military Armory Keycard（适配自定义物品栏）
--- 尝试通过常见的自定义物品存储位置检测（根据游戏实际情况可能需要调整）
-local function hasMilitaryKeycard()
-    -- 尝试1：检测玩家数据中的物品列表（常见于自定义系统）
-    local playerData = LocalPlayer:FindFirstChild("Data") or LocalPlayer:FindFirstChild("PlayerData")
-    if playerData then
-        local itemsFolder = playerData:FindFirstChild("Items") or playerData:FindFirstChild("Inventory")
-        if itemsFolder then
-            for _, item in ipairs(itemsFolder:GetChildren()) do
-                -- 假设物品名称或属性包含目标名称
-                if item.Name == "Military Armory Keycard" or (item:FindFirstChild("Name") and item.Name.Value == "Military Armory Keycard") then
-                    return true
-                end
-            end
-        end
-    end
-
-    -- 尝试2：检测客户端物品栏GUI对应的后端数据（部分游戏通过GUI绑定数据）
-    local playerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-    if playerGui then
-        local inventoryGui = playerGui:FindFirstChild("Inventory") or playerGui:FindFirstChild("BackpackGui")
-        if inventoryGui then
-            -- 假设GUI中存储了物品数据的脚本或值
-            local itemData = inventoryGui:FindFirstChild("ItemData")
-            if itemData and itemData:IsA("StringValue") then
-                -- 假设数据是JSON格式，尝试解析
-                local success, data = pcall(function()
-                    return Http:JSONDecode(itemData.Value)
-                end)
-                if success and type(data) == "table" then
-                    for _, item in ipairs(data) do
-                        if item.name == "Military Armory Keycard" then
-                            return true
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    -- 尝试3：检测角色上的自定义工具挂载点（非默认Tool类型）
-    local character = LocalPlayer.Character
-    if character then
-        local customTools = character:FindFirstChild("CustomTools") or character:FindFirstChild("Equipment")
-        if customTools then
-            for _, item in ipairs(customTools:GetChildren()) do
-                if item.Name == "Military Armory Keycard" then
-                    return true
-                end
-            end
-        end
-    end
-
-    return false
-end
-
 local function simulateMovement()
     local character = LocalPlayer.Character
     if not character then return end
@@ -119,25 +63,38 @@ local MainScript = [[
     loadstring(game:HttpGet("https://raw.githubusercontent.com/xiaoling-create/Roblox/refs/heads/main/Starrain%E5%8D%B0%E9%92%9E%E6%9C%BA%E6%B5%8B%E8%AF%95.lua"))()
 ]]
 
+-- 尝试绕过力场的函数
+local function bypassForceField(character)
+    if not character then return end
+    
+    -- 方法1：直接移除力场
+    local forceField = character:FindFirstChild("ForceField")
+    if forceField then
+        pcall(function() forceField:Destroy() end)
+    end
+    
+    -- 方法2：修改力场属性（如果存在）
+    if forceField and forceField:IsA("ForceField") then
+        pcall(function()
+            forceField.Visible = false
+            forceField.Enabled = false
+        end)
+    end
+    
+    -- 方法3：暂时禁用碰撞（辅助拾取）
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if rootPart then
+        pcall(function() rootPart.CanCollide = false end)
+    end
+end
+
+-- 修改等待力场消失的逻辑，加入主动绕过尝试
 repeat
     task.wait()
     simulateMovement()
+    bypassForceField(LocalPlayer.Character) -- 每次循环都尝试绕过
     task.wait(0.01)
 until not (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("ForceField"))
-
--- 检查是否已有Military Armory Keycard，有则直接换服
-if hasMilitaryKeycard() then
-    print("检测到已持有Military Armory Keycard，准备换服...")
-    local targetServer = getRandomServer()
-    if targetServer then
-        queue_on_teleport(MainScript)
-        task.wait(1)
-        TeleportService:TeleportToPlaceInstance(_place, targetServer.id, LocalPlayer)
-    else
-        warn("检测到Military Armory Keycard但无可用服务器")
-    end
-    return
-end
 
 local function safeTeleport(targetCFrame, character)
     local rootPart = character:FindFirstChild("HumanoidRootPart")
@@ -179,12 +136,45 @@ local function findAllTargetItems()
     return targetItems
 end
 
+-- 新增：直接调用拾取函数（如果存在）
+local function directPickup(item)
+    -- 尝试通过物品实例的函数直接拾取
+    if item.instance and item.instance:FindFirstChild("PickupFunction") then
+        local success, result = pcall(function()
+            return item.instance.PickupFunction:InvokeServer(LocalPlayer)
+        end)
+        if success then return true end
+    end
+    
+    -- 尝试通过游戏全局函数拾取
+    if game:GetService("ReplicatedStorage"):FindFirstChild("PickupItem") then
+        local success, result = pcall(function()
+            game.ReplicatedStorage.PickupItem:FireServer(item.instance)
+        end)
+        if success then return true end
+    end
+    
+    return false
+end
+
 local function collectItem(item, character)
     if not character then return false end
     if not item.instance:IsDescendantOf(game) then
         return true 
     end
 
+    -- 拾取前再次尝试绕过力场
+    bypassForceField(character)
+    
+    -- 先尝试直接拾取（不移动）
+    if directPickup(item) then
+        task.wait(0.5)
+        if not item.instance:IsDescendantOf(game) then
+            return true
+        end
+    end
+    
+    -- 正常移动拾取流程
     local targetCFrame = item.part.CFrame * CFrame.new(0, 1, -3)
     local success = safeTeleport(targetCFrame, character)
     if not success then return false end
@@ -238,26 +228,16 @@ local function main()
     local failedItems = {}
 
     for i, item in ipairs(allItems) do
-        -- 再次检查是否已获得Military Armory Keycard，有则停止拾取并换服
-        if hasMilitaryKeycard() then
-            print("拾取过程中获得了Military Armory Keycard，准备换服...")
-            if targetServer then
-                queue_on_teleport(MainScript)
-                task.wait(1)
-                TeleportService:TeleportToPlaceInstance(_place, targetServer.id, LocalPlayer)
-            else
-                warn("获得Military Armory Keycard但无可用服务器")
-            end
-            return
-        end
-        
         print("正在拾取 " .. i .. "/" .. #allItems .. "（" .. item.type .. "）")
         local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+        -- 拾取前再次绕过力场
+        bypassForceField(character)
         local success = collectItem(item, character)
         
         if not success then
             warn("首次拾取失败，重试一次：" .. item.type)
             task.wait(2)
+            bypassForceField(character) -- 重试前再次绕过
             success = collectItem(item, character)
             if not success then
                 warn("标记为无法拾取：" .. item.type)
@@ -270,33 +250,37 @@ local function main()
         end
     end
 
-    -- 检查是否在拾取后获得了Military Armory Keycard
-    if hasMilitaryKeycard() then
-        print("拾取完成后发现已获得Military Armory Keycard，准备换服...")
-        if targetServer then
-            queue_on_teleport(MainScript)
-            task.wait(1)
-            TeleportService:TeleportToPlaceInstance(_place, targetServer.id, LocalPlayer)
-        else
-            warn("获得Military Armory Keycard但无可用服务器")
+    if #failedItems > 0 then
+        print("开始处理标记为失败的物品（共" .. #failedItems .. "个）")
+        for i, item in ipairs(failedItems) do
+            print("最后尝试拾取 失败物品 " .. i .. "/" .. #failedItems .. "（" .. item.type .. "）")
+            local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+            bypassForceField(character) -- 最后尝试前绕过
+            local success = collectItem(item, character)
+            
+            if success then
+                table.remove(failedItems, i)
+                print("失败物品拾取成功：" .. item.type)
+            else
+                warn("最终拾取失败：" .. item.type)
+            end
         end
-        return
     end
 
     if #failedItems > 0 then
-        print("存在无法拾取的物品，将在3分钟后换服：")
+        print("存在无法拾取的物品，将在5分钟后换服：")
         for _, item in ipairs(failedItems) do
             print("- " .. item.type)
         end
         
-        task.wait(180)
+        task.wait(10)
         if targetServer then
-            print("3分钟超时，执行换服...")
+            print("5分钟超时，执行换服...")
             queue_on_teleport(MainScript)
             task.wait(1)
             TeleportService:TeleportToPlaceInstance(_place, targetServer.id, LocalPlayer)
         else
-            warn("3分钟超时但无可用服务器")
+            warn("5分钟超时但无可用服务器")
         end
     else
         print("所有目标物品已拾取，准备换服...")
